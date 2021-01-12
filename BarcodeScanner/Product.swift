@@ -8,7 +8,8 @@
 import Foundation
 
 struct Product {
-    var name :String
-    var imageURL:URL
-    
+    var name :String = ""
+    var price:Int = 0
+    var barcode:Int = 0
+    var imageURL:String = ""
 }

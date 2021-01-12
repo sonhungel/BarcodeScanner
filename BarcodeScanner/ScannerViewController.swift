@@ -9,6 +9,7 @@ import UIKit
 import AVFoundation
 import Vision
 import SnapKit
+import JGProgressHUD
 
 import Foundation
 
@@ -213,6 +214,10 @@ class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDel
         }
     }
 // MARK: Data Output
+    
+    var message:String?
+    var product:[String:Any]?
+
     public func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         
         // Check if the metadataObjects array is not nil and it contains at least one object.
@@ -236,9 +241,10 @@ class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDel
                 lastCapturedCode = metadataObj.stringValue
                 
                 //print("Scanned barcode: \(String(describing: metadataObj.stringValue))")
-                showAlert(withTitle: "Value", message: metadataObj.stringValue ?? "Nothing")
+                showAlert(withTitle: "Barcode", message: metadataObj.stringValue ?? "Nothing")
                 captureSession?.stopRunning()
             }
+
         }
     }
 //  MARK: Processing Status Setup
@@ -312,53 +318,107 @@ class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDel
         
     }
     
-    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        //showAlert(withTitle: "Test", message: "aloalo")
-        requestToAPI(barcode: "1234567", verifyCode: "1234", quantity: 1)
-
-    }
+//    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+//        //showAlert(withTitle: "Test", message: "aloalo")
+//        requestToAPI(barcode: "0", verifyCode: "1234", quantity: 1)
+//
+//    }
     
 
 //  MARK: Helper Function
     
     private func showAlert(withTitle title:String, message:String){
         let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: nil))
+        alertController.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: {[weak self](alertAction) in
+            
+            guard let strongSelf = self else {
+                return
+            }
+            strongSelf.captureSession?.startRunning()
+            
+        }))
         alertController.addAction(UIAlertAction(title: "Xác nhận", style: .default, handler: { [weak self](alertAction) in
             
             guard let strongSelf = self else {
                 return
             }
             
-            let textFieldQuantity = alertController.textFields![0] as UITextField
+            let textFieldQuantity = alertController.textFields![1] as UITextField
             if textFieldQuantity.text?.isEmpty == false {
                 //Read TextFields text data
-                let numberOfProduct = Int(textFieldQuantity.text!) ?? 0
+                let numberOfProduct = Int(textFieldQuantity.text!) ?? 1
 
                 if numberOfProduct == 0{
                     let alertWarning = UIAlertController(title: "Cảnh báo", message: "Nhập đúng số sản phẩm", preferredStyle: .alert)
-                    alertWarning.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: nil))
+                    alertWarning.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: {[weak self](alertAction) in
+                        guard let strongSelf = self else {
+                            return
+                        }
+                        strongSelf.captureSession?.startRunning()
+                    }))
                     strongSelf.present(alertWarning, animated: true, completion: nil)
+                    return
                 }
 
                 // in case the user entered a string, the value will be 0
-                print("TextField 1 : \(numberOfProduct)")
+                print("TextField number of product : \(numberOfProduct)")
             } else {
                 print("TextField 1 is Empty...")
             }
             
-            let textFieldVerifyCode = alertController.textFields![1] as UITextField
-            if textFieldVerifyCode.text?.isEmpty == false {
+            let textFieldVerifyCode = alertController.textFields![0] as UITextField
+            if textFieldVerifyCode.text?.isEmpty == true {
+                let alertWarning = UIAlertController(title: "Cảnh báo", message: "Nhập đẩy đủ mã xác nhận", preferredStyle: .alert)
+                alertWarning.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: {[weak self](alertAction) in
+                    guard let strongSelf = self else {
+                        return
+                    }
+                    strongSelf.captureSession?.startRunning()
+                }))
+                strongSelf.present(alertWarning, animated: true, completion: nil)
+                return
+            }
+            else
+            {
+                print("TextField number of product : \(textFieldVerifyCode)")
+            }
+            
+            strongSelf.requestToAPI(barcode: strongSelf.messageLabel.text ?? "", verifyCode: textFieldVerifyCode.text!, quantity: Int(textFieldQuantity.text!)!)
+            strongSelf.captureSession?.startRunning()
+            
+            if strongSelf.message == "Add cart successfully!"
+            {
+                var prod = Product()
+                prod.name = (strongSelf.product?["title"] as? String) ?? ""
+                prod.price = (strongSelf.product?["price"] as? Int) ?? 0
+                prod.barcode = (strongSelf.product?["barcodeValue"] as? Int) ?? 0
+                prod.imageURL = (strongSelf.product?["imageUrl"] as? String) ?? ""
                 
+                print(prod,"\n")
+                
+                let infoView = InfoViewController(product: prod)
+                strongSelf.navigationController?.pushViewController(infoView, animated: true)
+            }
+            else{
+                let alertWarning = UIAlertController(title: "Cảnh báo", message: "Quét thất bại", preferredStyle: .alert)
+                alertWarning.addAction(UIAlertAction(title: "Huỷ", style: .cancel, handler: {[weak self](alertAction) in
+                    guard let strongSelf = self else {
+                        return
+                    }
+                    strongSelf.captureSession?.startRunning()
+                }))
+                strongSelf.present(alertWarning, animated: true, completion: nil)
             }
             
         }))
+        
+        
         alertController.addTextField { (textField) in
-            textField.placeholder = "Nhập số lượng sản phẩm..."
+            textField.placeholder = "Nhập mã OTP..."
             textField.textColor = .black
         }
         alertController.addTextField { (textField) in
-            textField.placeholder = "Nhập mã OTP..."
+            textField.placeholder = "Nhập số lượng sản phẩm..."
             textField.textColor = .black
         }
         present(alertController, animated: true, completion: nil)
@@ -366,7 +426,7 @@ class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDel
     
     private func requestToAPI(barcode:String, verifyCode:String, quantity:Int){
         
-        //var semaphore = DispatchSemaphore (value: 0)
+        let semaphore = DispatchSemaphore (value: 0)
         
         // create parameters
         let parameters = ["barcodeValue": "\(barcode)", "verifyCode": "\(verifyCode)", "quantity": "\(quantity)"]
@@ -382,27 +442,46 @@ class ScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDel
         request.httpMethod = "POST"
         request.httpBody = jsonData
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
-          guard let data = data else {
-            print(String(describing: error))
-            //semaphore.signal()
-            return
-          }
-            //print(String(data: data, encoding: .utf8)!)
+        DispatchQueue.global(qos: .background).async {
+            
+        let task = URLSession.shared.dataTask(with: request) { [weak self]data, response, error in
+            
+            guard let strongSelf = self else {
+                            return
+                        }
+            
+            guard let data = data else {
+                print(String(describing: error))
+                semaphore.signal()
+                return
+            }
             
             do {
                 guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: AnyObject] else { return }
-                print("json:", json)
+                //print("json:", json)
+
+                for (key, value) in json {
+                    if key == "message"
+                    {
+                        strongSelf.message = value as? String
+                        //print("message: \(strongSelf.message)")
+                    }
+                    else if key == "prod"
+                    {
+                        strongSelf.product = value as? [String:Any]
+                        //print("prod: \(strongSelf.product)")
+                    }
+                  
+                }
             } catch {
                 print("error:", error)
             }
-            
-          //semaphore.signal()
+            semaphore.signal()
         }
-
+        
         task.resume()
-        //semaphore.wait()
+        }
+        semaphore.wait()
     }
-    
-    
+ 
 }
